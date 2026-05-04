@@ -30,3 +30,12 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Compiled binaries (output of make build-bins)
+bin/
+
+# Cloned upstream source trees (output of make clone-*)
+_src/
+
+# Sensor work directory (created when running sensor locally with base config).
+.work/
