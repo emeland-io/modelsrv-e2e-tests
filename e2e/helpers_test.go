@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 
 	"gopkg.in/yaml.v3"
 )
@@ -110,7 +111,7 @@ func mustRun(name string, args ...string) {
 
 func killProc(cmd *exec.Cmd) {
 	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
+		_ = cmd.Process.Signal(syscall.SIGTERM)
 	}
 }
 

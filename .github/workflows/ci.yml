@@ -36,7 +36,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.26.1"
-          cache: false   # no go.sum; cache would error on first run
 
       # ── repo access (private GitHub repos) ─────────────────────────────────
       # For PUBLIC repos (default fixture: test-gitsensor-target) this is a no-op.

@@ -55,7 +55,6 @@ var _ = Describe("Git Sensor", func() {
 				WithTimeout(20 * time.Second).WithPolling(300 * time.Millisecond).Should(Succeed())
 
 			By("no_findings: brief settle before assertions")
-			time.Sleep(3 * time.Second)
 		})
 
 		AfterAll(func() {
@@ -130,7 +129,6 @@ var _ = Describe("Git Sensor", func() {
 				WithTimeout(20 * time.Second).WithPolling(300 * time.Millisecond).Should(Succeed())
 
 			By("findings: brief settle before assertions")
-			time.Sleep(3 * time.Second)
 		})
 
 		AfterAll(func() {
@@ -188,7 +186,7 @@ var _ = Describe("Git Sensor", func() {
 		defer collector.stop()
 
 		Eventually(func() error { return checkReady(collector.URL() + "/test") }).
-			WithTimeout(3*time.Second).WithPolling(50*time.Millisecond).Should(Succeed())
+			WithTimeout(3 * time.Second).WithPolling(50 * time.Millisecond).Should(Succeed())
 
 		By("shutdown: starting sensor against stub")
 		sensPort := freePort()
@@ -197,7 +195,7 @@ var _ = Describe("Git Sensor", func() {
 		subscriberBase := collector.URL() + "/"
 
 		cfgFile := buildRuntimeSensorConfig(loadBaseConfig(), targetRepoDir, subscriberBase,
-			[]string{"watchedDir/no_findings"})
+			[]string{watchPathNoFindings})
 		defer func() { _ = os.Remove(cfgFile) }()
 
 		logFile := logPath("sensor-shutdown")
@@ -205,7 +203,7 @@ var _ = Describe("Git Sensor", func() {
 			"-config", cfgFile, "-listen", sensHost, "-poll-interval", "5s")
 
 		Eventually(func() error { return checkReady(sensURL + "/api/test") }).
-			WithTimeout(20*time.Second).WithPolling(200*time.Millisecond).Should(Succeed())
+			WithTimeout(20 * time.Second).WithPolling(200 * time.Millisecond).Should(Succeed())
 
 		By("shutdown: SIGTERM sensor, then expect Node Delete on subscriber")
 		Expect(sensProc.Process.Signal(syscall.SIGTERM)).To(Succeed())
