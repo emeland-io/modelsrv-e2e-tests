@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -110,8 +111,16 @@ func mustRun(name string, args ...string) {
 }
 
 func killProc(cmd *exec.Cmd) {
-	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
 	}
 }
 
