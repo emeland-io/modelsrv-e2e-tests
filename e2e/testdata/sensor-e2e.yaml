@@ -1,0 +1,12 @@
+# E2E base config for the git sensor.
+# The test suite reads the repo URL from here, clones it locally,
+# and generates a runtime config with the local path and subscriber URL.
+subscribers: []
+watch: true
+repos:
+  - type: github
+    repo: https://github.com/emeland-io/test-gitsensor-target
+    branch: main
+    checkoutDir: ".work/checkout/test-gitsensor-target"
+    paths:
+      - "watchedDir/no_findings"

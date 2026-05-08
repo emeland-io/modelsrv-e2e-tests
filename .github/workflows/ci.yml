@@ -1,0 +1,112 @@
+name: E2E
+
+on:
+  # Run on every push and pull request (uses default refs below; use workflow_dispatch to override).
+  push:
+    # branches:
+    #   - main
+
+  # Manual trigger with optional ref overrides.
+  workflow_dispatch:
+    inputs:
+      modelsrv_ref:
+        description: "modelsrv branch or tag (leave empty to use Makefile MODELSRV_REF)"
+        required: false
+        default: ""
+      sensor_ref:
+        description: "modelsrv-git-sensor branch or tag (leave empty to use Makefile SENSOR_REF)"
+        required: false
+        default: ""
+
+  # Fired by modelsrv and modelsrv-git-sensor CI when they merge to main.
+  # Payload fields: modelsrv_ref, sensor_ref, triggered_by.
+  repository_dispatch:
+    types: [run-e2e]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout e2e repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.1"
+
+      # ── repo access (private GitHub repos) ─────────────────────────────────
+      # For PUBLIC repos (default fixture: test-gitsensor-target) this is a no-op.
+      #
+      # Deploy key / SSH (recommended for private clones in CI):
+      #   • Generate:  ssh-keygen -t ed25519 -f e2e_key -N ""
+      #   • Register **e2e_key.pub** (public half) as a read-only Deploy Key on
+      #     every private repo this workflow clones (modelsrv, sensor, fixture).
+      #   • In **this** repo: add secret **E2E_SSH_KEY** = full contents of **e2e_key**
+      #     (the **private** key — never commit the private key or use .pub here).
+      #   • This step installs the private key so plain `git clone git@github.com:...`
+      #     and https://github.com/... clones from the job can authenticate.
+      #
+      # HTTPS alternative: secret **REPO_ACCESS_TOKEN** (fine-grained PAT, read-only
+      # on those repos). The step rewrites https://github.com/ to embed the token.
+      - name: Configure git credentials
+        env:
+          SSH_KEY:     ${{ secrets.E2E_SSH_KEY }}
+          HTTPS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        run: |
+          if [ -n "$SSH_KEY" ]; then
+            echo "Using SSH deploy key for git clone"
+            mkdir -p ~/.ssh
+            echo "$SSH_KEY" > ~/.ssh/e2e_id_ed25519
+            chmod 600 ~/.ssh/e2e_id_ed25519
+            cat >> ~/.ssh/config <<'EOF'
+          Host github.com
+            IdentityFile ~/.ssh/e2e_id_ed25519
+            StrictHostKeyChecking accept-new
+          EOF
+          elif [ -n "$HTTPS_TOKEN" ]; then
+            echo "Using HTTPS token for git clone"
+            git config --global \
+              url."https://x-access-token:${HTTPS_TOKEN}@github.com/".insteadOf \
+              "https://github.com/"
+          else
+            echo "No credentials configured — assuming public repositories"
+          fi
+
+      # Defaults come from Makefile (MODELSRV_REF / SENSOR_REF). Optional overrides:
+      #   workflow_dispatch: non-empty inputs
+      #   repository_dispatch: client_payload.modelsrv_ref / sensor_ref
+      - name: Resolve E2E clone refs from Makefile
+        run: |
+          MR=$(make -s print-MODELSRV_REF)
+          SR=$(make -s print-SENSOR_REF)
+          case "${{ github.event_name }}" in
+            repository_dispatch)
+              [ -n "${{ github.event.client_payload.modelsrv_ref }}" ] && MR="${{ github.event.client_payload.modelsrv_ref }}"
+              [ -n "${{ github.event.client_payload.sensor_ref }}" ] && SR="${{ github.event.client_payload.sensor_ref }}"
+              ;;
+            workflow_dispatch)
+              [ -n "${{ inputs.modelsrv_ref }}" ] && MR="${{ inputs.modelsrv_ref }}"
+              [ -n "${{ inputs.sensor_ref }}" ] && SR="${{ inputs.sensor_ref }}"
+              ;;
+          esac
+          echo "MODELSRV_REF=$MR" >> "$GITHUB_ENV"
+          echo "SENSOR_REF=$SR" >> "$GITHUB_ENV"
+          echo "Resolved MODELSRV_REF=$MR SENSOR_REF=$SR"
+
+      # Same clone/build/test path as locally: `make test` → build-bins → go test.
+      # Pass refs explicitly so overrides win reliably alongside GitHub env.
+      - name: Build binaries and run E2E tests
+        run: |
+          make test MODELSRV_REF="${MODELSRV_REF}" SENSOR_REF="${SENSOR_REF}"
+
+      # ── collect logs on failure ──────────────────────────────────────────────
+      - name: Upload process logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: /tmp/e2e-*.log
+          if-no-files-found: ignore
